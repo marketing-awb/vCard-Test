@@ -46,20 +46,6 @@
         tbody tr:hover {
             background-color: #eef2ff;
         }
-        td[contenteditable="true"] {
-            border: 1px solid transparent;
-            border-radius: 0.25rem;
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-        td[contenteditable="true"]:hover {
-            background-color: #e5e7eb;
-        }
-        td[contenteditable="true"]:focus {
-            outline: none;
-            border-color: #3b82f6;
-            background-color: white;
-        }
         .message-box {
             position: fixed;
             top: 1rem;
@@ -76,6 +62,42 @@
         .message-box.visible {
             opacity: 1;
         }
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .modal.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: translateY(20px);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal.open .modal-content {
+            transform: translateY(0);
+        }
+        
     </style>
 </head>
 <body>
@@ -148,6 +170,52 @@
     </div>
 </div>
 
+<!-- Edit Contact Modal -->
+<div id="edit-modal" class="modal">
+    <div class="modal-content">
+        <h2 id="modal-title" class="text-2xl font-bold mb-6 text-center text-gray-800">Edit Contact</h2>
+        <form id="contact-form" class="space-y-4">
+            <input type="hidden" id="modal-row-index">
+            <div class="flex flex-col">
+                <label for="modal-fn" class="text-sm font-medium text-gray-700">Full Name (FN)</label>
+                <input type="text" id="modal-fn" class="p-3 mt-1 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex flex-col">
+                <label for="modal-tel" class="text-sm font-medium text-gray-700">Telephone (TEL)</label>
+                <input type="tel" id="modal-tel" class="p-3 mt-1 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex flex-col">
+                <label for="modal-email" class="text-sm font-medium text-gray-700">Email (EMAIL)</label>
+                <input type="email" id="modal-email" class="p-3 mt-1 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex flex-col">
+                <label for="modal-org" class="text-sm font-medium text-gray-700">Organization (ORG)</label>
+                <input type="text" id="modal-org" class="p-3 mt-1 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex flex-col">
+                <label for="modal-adr" class="text-sm font-medium text-gray-700">Address (ADR)</label>
+                <input type="text" id="modal-adr" class="p-3 mt-1 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex flex-col">
+                <label for="modal-note" class="text-sm font-medium text-gray-700">Note (NOTE)</label>
+                <textarea id="modal-note" rows="3" class="p-3 mt-1 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" id="modal-delete-btn" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200">
+                    Delete
+                </button>
+                <button type="button" id="modal-cancel-btn" class="bg-gray-400 hover:bg-gray-500 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200">
+                    Cancel
+                </button>
+                <button type="submit" id="modal-save-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script type="module">
     // Import the Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -177,6 +245,20 @@
     const shareLinkContainer = document.getElementById('share-link-container');
     const addContactBtn = document.getElementById('add-contact-btn');
     const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+
+    // Modal elements
+    const editModal = document.getElementById('edit-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const contactForm = document.getElementById('contact-form');
+    const modalRowIndex = document.getElementById('modal-row-index');
+    const modalFn = document.getElementById('modal-fn');
+    const modalTel = document.getElementById('modal-tel');
+    const modalEmail = document.getElementById('modal-email');
+    const modalOrg = document.getElementById('modal-org');
+    const modalAdr = document.getElementById('modal-adr');
+    const modalNote = document.getElementById('modal-note');
+    const modalDeleteBtn = document.getElementById('modal-delete-btn');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
     // App state
     let firebaseApp;
@@ -263,6 +345,9 @@
         const selectHeader = document.createElement('th');
         selectHeader.innerHTML = '<input type="checkbox" id="select-all-checkbox">';
         tr.appendChild(selectHeader);
+        const actionsHeader = document.createElement('th');
+        actionsHeader.textContent = 'Actions';
+        tr.appendChild(actionsHeader);
         vcardProperties.forEach(col => {
             const th = document.createElement('th');
             th.textContent = col;
@@ -280,12 +365,16 @@
             selectCell.innerHTML = `<input type="checkbox" class="select-row-checkbox" data-row-index="${rowIndex}">`;
             rowElement.appendChild(selectCell);
 
+            const actionsCell = document.createElement('td');
+            actionsCell.innerHTML = `
+                <button class="edit-btn text-blue-600 hover:text-blue-800 font-semibold mr-2" data-row-index="${rowIndex}">Edit</button>
+                <button class="export-btn text-green-600 hover:text-green-800 font-semibold" data-row-index="${rowIndex}">Export</button>
+            `;
+            rowElement.appendChild(actionsCell);
+
             vcardProperties.forEach(col => {
                 const cell = document.createElement('td');
                 cell.textContent = row[col] || '';
-                cell.setAttribute('contenteditable', 'true');
-                cell.dataset.row = rowIndex;
-                cell.dataset.col = col;
                 rowElement.appendChild(cell);
             });
             tbody.appendChild(rowElement);
@@ -307,11 +396,15 @@
 
     /**
      * Reconstructs the VCF string from the table data.
+     * @param {number | null} rowIndex The index of the contact to export, or null for all.
      * @returns {string} The reconstructed VCF content.
      */
-    function reconstructVCF() {
+    function reconstructVCF(rowIndex = null) {
         let vcfString = '';
-        vcfData.forEach(vcard => {
+        const contactsToExport = rowIndex !== null ? [vcfData[rowIndex]] : vcfData;
+
+        contactsToExport.forEach(vcard => {
+            if (!vcard) return;
             vcfString += 'BEGIN:VCARD\n';
             vcfString += 'VERSION:3.0\n';
             for (const prop of vcardProperties) {
@@ -324,6 +417,37 @@
         return vcfString;
     }
     
+    /**
+     * Opens the modal to edit or add a contact.
+     * @param {number | null} rowIndex The index of the contact to edit, or null for a new contact.
+     */
+    function openEditModal(rowIndex = null) {
+        modalRowIndex.value = rowIndex !== null ? rowIndex : '';
+        if (rowIndex !== null) {
+            const contact = vcfData[rowIndex];
+            modalTitle.textContent = 'Edit Contact';
+            modalFn.value = contact.FN || '';
+            modalTel.value = contact.TEL || '';
+            modalEmail.value = contact.EMAIL || '';
+            modalOrg.value = contact.ORG || '';
+            modalAdr.value = contact.ADR || '';
+            modalNote.value = contact.NOTE || '';
+            modalDeleteBtn.style.display = 'inline-block';
+        } else {
+            modalTitle.textContent = 'Add New Contact';
+            contactForm.reset();
+            modalDeleteBtn.style.display = 'none';
+        }
+        editModal.classList.add('open');
+    }
+
+    /**
+     * Closes the edit modal.
+     */
+    function closeEditModal() {
+        editModal.classList.remove('open');
+    }
+
     // --- Firebase and Data Handling ---
     
     /**
@@ -463,14 +587,86 @@
         }
     });
 
-    vcfTable.addEventListener('input', (event) => {
-        const cell = event.target;
-        const rowIndex = parseInt(cell.dataset.row, 10);
-        const colName = cell.dataset.col;
-        const newValue = cell.textContent;
+    // Delegated event listener for edit and export buttons
+    vcfTable.addEventListener('click', (event) => {
+        const rowIndex = parseInt(event.target.dataset.rowIndex, 10);
+        if (event.target.classList.contains('edit-btn')) {
+            openEditModal(rowIndex);
+        } else if (event.target.classList.contains('export-btn')) {
+            exportSingleContact(rowIndex);
+        }
+    });
 
-        if (vcfData[rowIndex]) {
-            vcfData[rowIndex][colName] = newValue;
+    /**
+     * Exports a single contact as a downloadable VCF file.
+     * @param {number} rowIndex The index of the contact to export.
+     */
+    function exportSingleContact(rowIndex) {
+        if (vcfData.length === 0 || !vcfData[rowIndex]) {
+            displayMessage('No contact data to export.', 'error');
+            return;
+        }
+
+        const vcfContent = reconstructVCF(rowIndex);
+        const contact = vcfData[rowIndex];
+        const fileName = (contact.FN || 'contact').replace(/[^a-zA-Z0-9]/g, '_'); // Sanitize filename
+        const blob = new Blob([vcfContent], { type: 'text/vcf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName}.vcf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        displayMessage(`Exported "${contact.FN || 'Contact'}" successfully!`, 'success');
+    }
+
+    // Handle form submission
+    contactForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        
+        const rowIndex = modalRowIndex.value !== '' ? parseInt(modalRowIndex.value, 10) : null;
+        const newContact = {
+            FN: modalFn.value,
+            TEL: modalTel.value,
+            EMAIL: modalEmail.value,
+            ORG: modalOrg.value,
+            ADR: modalAdr.value,
+            NOTE: modalNote.value
+        };
+
+        if (rowIndex !== null) {
+            // Editing existing contact
+            vcfData[rowIndex] = newContact;
+            displayMessage('Contact updated successfully!', 'success');
+        } else {
+            // Adding a new contact
+            vcfData.push(newContact);
+            displayMessage('New contact added successfully!', 'success');
+        }
+
+        renderTable(vcfData);
+        closeEditModal();
+    });
+
+    // Modal buttons
+    modalCancelBtn.addEventListener('click', closeEditModal);
+
+    modalDeleteBtn.addEventListener('click', () => {
+        const rowIndex = parseInt(modalRowIndex.value, 10);
+        if (rowIndex !== undefined && vcfData[rowIndex]) {
+            vcfData.splice(rowIndex, 1);
+            renderTable(vcfData);
+            displayMessage('Contact deleted successfully!', 'success');
+            closeEditModal();
+        }
+    });
+
+    // Close modal on outside click
+    editModal.addEventListener('click', (event) => {
+        if (event.target === editModal) {
+            closeEditModal();
         }
     });
 
@@ -540,11 +736,7 @@
     });
 
     addContactBtn.addEventListener('click', () => {
-        const newContact = {};
-        vcardProperties.forEach(prop => newContact[prop] = '');
-        vcfData.push(newContact);
-        renderTable(vcfData);
-        displayMessage('New contact row added!', 'success');
+        openEditModal(null);
     });
 
     deleteSelectedBtn.addEventListener('click', () => {
