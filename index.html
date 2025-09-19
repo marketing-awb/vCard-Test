@@ -335,36 +335,31 @@
             db = getFirestore(firebaseApp);
             auth = getAuth(firebaseApp);
             
-            // Wait for the authentication to complete before doing anything else
-            let user;
-            if (initialAuthToken) {
-                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                user = userCredential.user;
-            } else {
-                const userCredential = await signInAnonymously(auth);
-                user = userCredential.user;
-            }
-
-            // After authentication is complete, proceed with the rest of the app logic
-            if (user) {
-                currentUserId = user.uid;
-                userIdDisplay.textContent = currentUserId;
-                displayMessage('Signed in successfully!', 'success');
-                await loadHostedFiles();
-                
-                // Check for URL parameters to load a shared file
-                const urlParams = new URLSearchParams(window.location.search);
-                const fileId = urlParams.get('fileId');
-                if (fileId) {
-                    currentVcfName = fileId;
-                    await loadVcfFile(fileId);
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    userIdDisplay.textContent = currentUserId;
+                    displayMessage('Signed in successfully!', 'success');
+                    await loadHostedFiles();
+                    
+                    // Check for URL parameters to load a shared file
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const fileId = urlParams.get('fileId');
+                    if (fileId) {
+                        currentVcfName = fileId;
+                        await loadVcfFile(fileId);
+                    }
+                } else {
+                    currentUserId = crypto.randomUUID(); // Use a random ID for anonymous
+                    userIdDisplay.textContent = currentUserId;
+                    displayMessage('Signing in...', 'info');
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
                 }
-            } else {
-                // This path should ideally not be reached, but good for error handling
-                currentUserId = 'anonymous'; 
-                userIdDisplay.textContent = currentUserId;
-                displayMessage('Failed to sign in. Anonymous session started.', 'info');
-            }
+            });
 
         } catch (error) {
             console.error('Error initializing Firebase:', error);
