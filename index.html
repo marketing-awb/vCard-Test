@@ -17,7 +17,7 @@
             margin: 0 auto;
             padding: 2rem;
         }
-        .vcf-table-container {
+        .vcf-table-container, .export-selection-container {
             max-height: 500px;
             overflow: auto;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -97,7 +97,6 @@
         .modal.open .modal-content {
             transform: translateY(0);
         }
-        
     </style>
 </head>
 <body>
@@ -123,11 +122,11 @@
             <button id="add-contact-btn" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
                 Add New Contact
             </button>
+            <button id="export-selected-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
+                Export Selected
+            </button>
             <button id="delete-selected-btn" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
                 Delete Selected
-            </button>
-            <button id="download-btn" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
-                Download Edited VCF
             </button>
         </div>
     </div>
@@ -158,7 +157,7 @@
         </div>
     </div>
 
-    <div class="vcf-table-container">
+    <div class="vcf-table-container mb-8">
         <table id="vcf-table">
             <thead>
                 <!-- VCF header will be rendered here -->
@@ -168,6 +167,26 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Export Selection List -->
+    <div id="export-selection-container" class="export-selection-container p-4 hidden">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-semibold text-gray-700">Select Contacts to Export</h3>
+            <div class="flex items-center gap-2">
+                <label for="export-select-all-checkbox" class="text-sm text-gray-600">Select All</label>
+                <input type="checkbox" id="export-select-all-checkbox">
+            </div>
+        </div>
+        <ul id="export-list" class="space-y-2">
+            <!-- Checkbox list will be rendered here -->
+        </ul>
+        <div class="mt-4 flex justify-end">
+            <button id="download-selected-btn" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
+                Download Selected
+            </button>
+        </div>
+    </div>
+
 </div>
 
 <!-- Edit Contact Modal -->
@@ -234,7 +253,7 @@
     const messageBox = document.getElementById('message-box');
     const fileInput = document.getElementById('file-input');
     const vcfTable = document.getElementById('vcf-table');
-    const downloadBtn = document.getElementById('download-btn');
+    const exportSelectedBtn = document.getElementById('export-selected-btn');
     const saveBtn = document.getElementById('save-btn');
     const hostingSection = document.getElementById('hosting-section');
     const fileNameInput = document.getElementById('file-name');
@@ -245,6 +264,11 @@
     const shareLinkContainer = document.getElementById('share-link-container');
     const addContactBtn = document.getElementById('add-contact-btn');
     const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    const exportSelectionContainer = document.getElementById('export-selection-container');
+    const exportList = document.getElementById('export-list');
+    const exportSelectAllCheckbox = document.getElementById('export-select-all-checkbox');
+    const downloadSelectedBtn = document.getElementById('download-selected-btn');
+
 
     // Modal elements
     const editModal = document.getElementById('edit-modal');
@@ -368,7 +392,6 @@
             const actionsCell = document.createElement('td');
             actionsCell.innerHTML = `
                 <button class="edit-btn text-blue-600 hover:text-blue-800 font-semibold mr-2" data-row-index="${rowIndex}">Edit</button>
-                <button class="export-btn text-green-600 hover:text-green-800 font-semibold" data-row-index="${rowIndex}">Export</button>
             `;
             rowElement.appendChild(actionsCell);
 
@@ -386,24 +409,25 @@
         setTimeout(() => {
             hostingSection.classList.remove('scale-y-0', 'opacity-0');
         }, 10);
-        downloadBtn.disabled = false;
-        downloadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         addContactBtn.disabled = false;
         addContactBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         deleteSelectedBtn.disabled = false;
         deleteSelectedBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        exportSelectedBtn.disabled = false;
+        exportSelectedBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+        // Hide the export selection list
+        exportSelectionContainer.classList.add('hidden');
     }
 
     /**
      * Reconstructs the VCF string from the table data.
-     * @param {number | null} rowIndex The index of the contact to export, or null for all.
+     * @param {any[]} contacts The array of vCard objects to export.
      * @returns {string} The reconstructed VCF content.
      */
-    function reconstructVCF(rowIndex = null) {
+    function reconstructVCF(contacts) {
         let vcfString = '';
-        const contactsToExport = rowIndex !== null ? [vcfData[rowIndex]] : vcfData;
-
-        contactsToExport.forEach(vcard => {
+        contacts.forEach(vcard => {
             if (!vcard) return;
             vcfString += 'BEGIN:VCARD\n';
             vcfString += 'VERSION:3.0\n';
@@ -592,35 +616,8 @@
         const rowIndex = parseInt(event.target.dataset.rowIndex, 10);
         if (event.target.classList.contains('edit-btn')) {
             openEditModal(rowIndex);
-        } else if (event.target.classList.contains('export-btn')) {
-            exportSingleContact(rowIndex);
         }
     });
-
-    /**
-     * Exports a single contact as a downloadable VCF file.
-     * @param {number} rowIndex The index of the contact to export.
-     */
-    function exportSingleContact(rowIndex) {
-        if (vcfData.length === 0 || !vcfData[rowIndex]) {
-            displayMessage('No contact data to export.', 'error');
-            return;
-        }
-
-        const vcfContent = reconstructVCF(rowIndex);
-        const contact = vcfData[rowIndex];
-        const fileName = (contact.FN || 'contact').replace(/[^a-zA-Z0-9]/g, '_'); // Sanitize filename
-        const blob = new Blob([vcfContent], { type: 'text/vcf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${fileName}.vcf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        displayMessage(`Exported "${contact.FN || 'Contact'}" successfully!`, 'success');
-    }
 
     // Handle form submission
     contactForm.addEventListener('submit', (event) => {
@@ -668,24 +665,6 @@
         if (event.target === editModal) {
             closeEditModal();
         }
-    });
-
-    downloadBtn.addEventListener('click', () => {
-        const vcfContent = reconstructVCF();
-        if (vcfContent.trim() === '') {
-            displayMessage('There is no data to download.', 'error');
-            return;
-        }
-        const blob = new Blob([vcfContent], { type: 'text/vcf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = currentVcfName ? `${currentVcfName}.vcf` : 'edited.vcf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        displayMessage('File download started!', 'success');
     });
 
     saveBtn.addEventListener('click', async () => {
@@ -764,6 +743,79 @@
                 checkbox.checked = isChecked;
             });
         }
+    });
+
+    // --- Export Selection Logic ---
+    exportSelectedBtn.addEventListener('click', () => {
+        if (vcfData.length === 0) {
+            displayMessage('No contacts to export.', 'info');
+            return;
+        }
+        renderExportSelectionList();
+        exportSelectionContainer.classList.remove('hidden');
+        document.querySelector('.vcf-table-container').classList.add('hidden');
+    });
+
+    function renderExportSelectionList() {
+        exportList.innerHTML = '';
+        vcfData.forEach((contact, index) => {
+            const li = document.createElement('li');
+            li.className = 'flex items-center gap-4 p-3 bg-gray-50 rounded-lg';
+            li.innerHTML = `
+                <input type="checkbox" id="export-contact-${index}" class="export-checkbox" data-index="${index}">
+                <label for="export-contact-${index}" class="flex-grow cursor-pointer">${contact.FN || 'Untitled Contact'}</label>
+            `;
+            exportList.appendChild(li);
+        });
+    }
+
+    exportSelectAllCheckbox.addEventListener('change', (event) => {
+        const isChecked = event.target.checked;
+        document.querySelectorAll('.export-checkbox').forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        updateDownloadBtnState();
+    });
+
+    exportList.addEventListener('change', () => {
+        updateDownloadBtnState();
+    });
+
+    function updateDownloadBtnState() {
+        const checkedCount = document.querySelectorAll('.export-checkbox:checked').length;
+        if (checkedCount > 0) {
+            downloadSelectedBtn.disabled = false;
+            downloadSelectedBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            downloadSelectedBtn.disabled = true;
+            downloadSelectedBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    downloadSelectedBtn.addEventListener('click', () => {
+        const selectedContacts = Array.from(document.querySelectorAll('.export-checkbox:checked'))
+            .map(checkbox => vcfData[parseInt(checkbox.dataset.index, 10)]);
+
+        if (selectedContacts.length === 0) {
+            displayMessage('Please select at least one contact to download.', 'error');
+            return;
+        }
+
+        const vcfContent = reconstructVCF(selectedContacts);
+        const blob = new Blob([vcfContent], { type: 'text/vcf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'selected_contacts.vcf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        displayMessage('Selected contacts downloaded successfully!', 'success');
+        
+        // Return to the main table view
+        exportSelectionContainer.classList.add('hidden');
+        document.querySelector('.vcf-table-container').classList.remove('hidden');
     });
 
     // Initial setup
