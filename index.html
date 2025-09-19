@@ -151,8 +151,8 @@
 <script type="module">
     // Import the Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     
     setLogLevel('debug'); // Enable Firestore debug logging
@@ -327,7 +327,7 @@
     // --- Firebase and Data Handling ---
     
     /**
-     * Initializes Firebase and sets up the auth state listener.
+     * Initializes Firebase and authenticates the user.
      */
     async function initializeFirebase() {
         try {
@@ -335,31 +335,31 @@
             db = getFirestore(firebaseApp);
             auth = getAuth(firebaseApp);
             
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    currentUserId = user.uid;
-                    userIdDisplay.textContent = currentUserId;
-                    displayMessage('Signed in successfully!', 'success');
-                    await loadHostedFiles();
-                    
-                    // Check for URL parameters to load a shared file
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const fileId = urlParams.get('fileId');
-                    if (fileId) {
-                        currentVcfName = fileId;
-                        await loadVcfFile(fileId);
-                    }
-                } else {
-                    currentUserId = crypto.randomUUID(); // Use a random ID for anonymous
-                    userIdDisplay.textContent = currentUserId;
-                    displayMessage('Signing in...', 'info');
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+            let userCredential;
+            if (initialAuthToken) {
+                userCredential = await signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                userCredential = await signInAnonymously(auth);
+            }
+
+            const user = userCredential.user;
+            if (user) {
+                currentUserId = user.uid;
+                userIdDisplay.textContent = currentUserId;
+                displayMessage('Signed in successfully!', 'success');
+                await loadHostedFiles();
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                const fileId = urlParams.get('fileId');
+                if (fileId) {
+                    currentVcfName = fileId;
+                    await loadVcfFile(fileId);
                 }
-            });
+            } else {
+                displayMessage('Failed to sign in. Anonymous session started.', 'info');
+                currentUserId = 'anonymous'; 
+                userIdDisplay.textContent = currentUserId;
+            }
 
         } catch (error) {
             console.error('Error initializing Firebase:', error);
