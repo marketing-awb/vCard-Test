@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VCF Editor & Host</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .vcf-table-container {
+            max-height: 500px;
+            overflow: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 0.5rem;
+            background-color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            white-space: nowrap;
+        }
+        thead th {
+            background-color: #e5e7eb;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        tbody tr:hover {
+            background-color: #eef2ff;
+        }
+        td[contenteditable="true"] {
+            border: 1px solid transparent;
+            border-radius: 0.25rem;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        td[contenteditable="true"]:hover {
+            background-color: #e5e7eb;
+        }
+        td[contenteditable="true"]:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background-color: white;
+        }
+        .message-box {
+            position: fixed;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .message-box.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="container bg-white rounded-xl shadow-lg my-8 p-8 md:p-12">
+    <div id="message-box" class="message-box bg-gray-800 text-white"></div>
+    
+    <h1 class="text-4xl md:text-5xl font-bold mb-4 text-center text-gray-800">VCF Editor & Host</h1>
+    <p class="text-center text-gray-600 mb-8">
+        Upload, edit, and host VCF files in real-time. Share the URL with others to collaborate.
+    </p>
+
+    <div class="mb-6 bg-gray-100 p-4 rounded-lg flex flex-col md:flex-row items-center justify-between flex-wrap gap-4">
+        <div class="flex items-center gap-2">
+            <span class="font-semibold">Your User ID:</span>
+            <span id="user-id" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">Loading...</span>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+            <label for="file-input" class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200">
+                Upload VCF File
+            </label>
+            <input id="file-input" type="file" accept=".vcf" class="hidden">
+            <button id="add-contact-btn" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
+                Add New Contact
+            </button>
+            <button id="delete-selected-btn" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
+                Delete Selected
+            </button>
+            <button id="download-btn" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg shadow-md transition-all duration-200 opacity-50 cursor-not-allowed" disabled>
+                Download Edited VCF
+            </button>
+        </div>
+    </div>
+    
+    <div class="mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-gray-700">Hosted Files</h2>
+        <div id="hosted-files-list" class="flex flex-wrap gap-3">
+            <p class="text-gray-500 italic">Loading hosted files...</p>
+        </div>
+    </div>
+
+    <div id="hosting-section" class="bg-gray-100 p-6 rounded-lg mb-8 transition-all duration-300 transform scale-y-0 origin-top opacity-0" style="display: none;">
+        <h2 class="text-2xl font-semibold mb-4 text-gray-700">Save Your VCF File</h2>
+        <div class="flex flex-col md:flex-row gap-4 items-center">
+            <input type="text" id="file-name" placeholder="Enter a unique name (e.g., my-project-v1)" class="flex-grow p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button id="save-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white py-3 px-6 rounded-lg shadow-md transition-all duration-200 w-full md:w-auto">
+                Save & Get Shareable Link
+            </button>
+        </div>
+        <div id="share-link-container" class="mt-4 hidden">
+            <label class="block text-gray-600 mb-2">Share this URL:</label>
+            <div class="flex items-center gap-2">
+                <input type="text" id="share-link" readonly class="flex-grow p-3 rounded-lg border border-gray-300 bg-white cursor-text">
+                <button id="copy-btn" class="bg-gray-700 hover:bg-gray-800 text-white p-3 rounded-lg shadow-md transition-all duration-200">
+                    Copy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="vcf-table-container">
+        <table id="vcf-table">
+            <thead>
+                <!-- VCF header will be rendered here -->
+            </thead>
+            <tbody>
+                <!-- VCF data will be rendered here -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+    // Import the Firebase modules
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    
+    setLogLevel('debug'); // Enable Firestore debug logging
+
+    // Global variables for Firebase configuration, provided by the platform
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    
+    // UI elements
+    const messageBox = document.getElementById('message-box');
+    const fileInput = document.getElementById('file-input');
+    const vcfTable = document.getElementById('vcf-table');
+    const downloadBtn = document.getElementById('download-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const hostingSection = document.getElementById('hosting-section');
+    const fileNameInput = document.getElementById('file-name');
+    const hostedFilesList = document.getElementById('hosted-files-list');
+    const shareLinkInput = document.getElementById('share-link');
+    const copyBtn = document.getElementById('copy-btn');
+    const userIdDisplay = document.getElementById('user-id');
+    const shareLinkContainer = document.getElementById('share-link-container');
+    const addContactBtn = document.getElementById('add-contact-btn');
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+
+    // App state
+    let firebaseApp;
+    let db;
+    let auth;
+    let vcfData = [];
+    let currentUserId = null;
+    let currentVcfName = null;
+    const vcardProperties = ['FN', 'TEL', 'EMAIL', 'ORG', 'ADR', 'NOTE'];
+
+    // --- Utility Functions ---
+
+    /**
+     * Displays a temporary message to the user.
+     * @param {string} message The message to display.
+     * @param {string} type The message type ('success', 'error', 'info').
+     */
+    function displayMessage(message, type = 'info') {
+        messageBox.textContent = message;
+        messageBox.className = 'message-box visible';
+        
+        // Tailwind classes based on type
+        switch(type) {
+            case 'success':
+                messageBox.classList.add('bg-green-500');
+                break;
+            case 'error':
+                messageBox.classList.add('bg-red-500');
+                break;
+            case 'info':
+            default:
+                messageBox.classList.add('bg-gray-800');
+                break;
+        }
+
+        setTimeout(() => {
+            messageBox.classList.remove('visible');
+            setTimeout(() => {
+                messageBox.className = 'message-box'; // Reset classes after fade out
+            }, 300);
+        }, 3000);
+    }
+    
+    /**
+     * Parses a VCF file string into a structured object array.
+     * @param {string} vcfContent The content of the VCF file.
+     * @returns {any[]} An array of vCard objects.
+     */
+    function parseVCF(vcfContent) {
+        const vcards = [];
+        const lines = vcfContent.split(/\r?\n/);
+        let currentVcard = {};
+
+        for (const line of lines) {
+            if (line.trim() === 'BEGIN:VCARD') {
+                currentVcard = {};
+            } else if (line.trim() === 'END:VCARD') {
+                if (Object.keys(currentVcard).length > 0) {
+                    vcards.push(currentVcard);
+                }
+            } else if (line.trim() !== '') {
+                const parts = line.split(':');
+                const property = parts[0].split(';')[0];
+                const value = parts.slice(1).join(':');
+                if (vcardProperties.includes(property)) {
+                    currentVcard[property] = value;
+                }
+            }
+        }
+        return vcards;
+    }
+
+    /**
+     * Renders the VCF data into an HTML table.
+     * @param {any[]} vcards The array of vCard objects.
+     */
+    function renderTable(vcards) {
+        vcfData = vcards;
+        vcfTable.innerHTML = '';
+        
+        // Render header
+        const thead = document.createElement('thead');
+        const tr = document.createElement('tr');
+        const selectHeader = document.createElement('th');
+        selectHeader.innerHTML = '<input type="checkbox" id="select-all-checkbox">';
+        tr.appendChild(selectHeader);
+        vcardProperties.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col;
+            tr.appendChild(th);
+        });
+        thead.appendChild(tr);
+        vcfTable.appendChild(thead);
+
+        // Render body
+        const tbody = document.createElement('tbody');
+        vcfData.forEach((row, rowIndex) => {
+            const rowElement = document.createElement('tr');
+            
+            const selectCell = document.createElement('td');
+            selectCell.innerHTML = `<input type="checkbox" class="select-row-checkbox" data-row-index="${rowIndex}">`;
+            rowElement.appendChild(selectCell);
+
+            vcardProperties.forEach(col => {
+                const cell = document.createElement('td');
+                cell.textContent = row[col] || '';
+                cell.setAttribute('contenteditable', 'true');
+                cell.dataset.row = rowIndex;
+                cell.dataset.col = col;
+                rowElement.appendChild(cell);
+            });
+            tbody.appendChild(rowElement);
+        });
+        vcfTable.appendChild(tbody);
+        
+        // Show the hosting section and enable buttons
+        hostingSection.style.display = 'block';
+        setTimeout(() => {
+            hostingSection.classList.remove('scale-y-0', 'opacity-0');
+        }, 10);
+        downloadBtn.disabled = false;
+        downloadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        addContactBtn.disabled = false;
+        addContactBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        deleteSelectedBtn.disabled = false;
+        deleteSelectedBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    /**
+     * Reconstructs the VCF string from the table data.
+     * @returns {string} The reconstructed VCF content.
+     */
+    function reconstructVCF() {
+        let vcfString = '';
+        vcfData.forEach(vcard => {
+            vcfString += 'BEGIN:VCARD\n';
+            vcfString += 'VERSION:3.0\n';
+            for (const prop of vcardProperties) {
+                if (vcard[prop]) {
+                    vcfString += `${prop}:${vcard[prop]}\n`;
+                }
+            }
+            vcfString += 'END:VCARD\n';
+        });
+        return vcfString;
+    }
+    
+    // --- Firebase and Data Handling ---
+    
+    /**
+     * Initializes Firebase and sets up the auth state listener.
+     */
+    async function initializeFirebase() {
+        try {
+            firebaseApp = initializeApp(firebaseConfig);
+            db = getFirestore(firebaseApp);
+            auth = getAuth(firebaseApp);
+            
+            // Wait for the authentication to complete before doing anything else
+            let user;
+            if (initialAuthToken) {
+                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                user = userCredential.user;
+            } else {
+                const userCredential = await signInAnonymously(auth);
+                user = userCredential.user;
+            }
+
+            // After authentication is complete, proceed with the rest of the app logic
+            if (user) {
+                currentUserId = user.uid;
+                userIdDisplay.textContent = currentUserId;
+                displayMessage('Signed in successfully!', 'success');
+                await loadHostedFiles();
+                
+                // Check for URL parameters to load a shared file
+                const urlParams = new URLSearchParams(window.location.search);
+                const fileId = urlParams.get('fileId');
+                if (fileId) {
+                    currentVcfName = fileId;
+                    await loadVcfFile(fileId);
+                }
+            } else {
+                // This path should ideally not be reached, but good for error handling
+                currentUserId = 'anonymous'; 
+                userIdDisplay.textContent = currentUserId;
+                displayMessage('Failed to sign in. Anonymous session started.', 'info');
+            }
+
+        } catch (error) {
+            console.error('Error initializing Firebase:', error);
+            displayMessage('Failed to initialize the app. Please check the console for details.', 'error');
+        }
+    }
+    
+    /**
+     * Loads the list of hosted VCF files from Firestore.
+     */
+    async function loadHostedFiles() {
+        try {
+            const vcfCollection = collection(db, `artifacts/${appId}/public/data/vcf_files`);
+            onSnapshot(vcfCollection, (snapshot) => {
+                hostedFilesList.innerHTML = '';
+                if (snapshot.empty) {
+                    hostedFilesList.innerHTML = '<p class="text-gray-500 italic">No hosted files yet. Upload and save one!</p>';
+                    return;
+                }
+                
+                snapshot.forEach(doc => {
+                    const fileId = doc.id;
+                    const button = document.createElement('button');
+                    button.textContent = fileId;
+                    button.className = 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-full transition-all duration-200';
+                    button.onclick = () => {
+                        loadVcfFile(fileId);
+                    };
+                    hostedFilesList.appendChild(button);
+                });
+            });
+
+        } catch (error) {
+            console.error('Error loading hosted files:', error);
+            displayMessage('Failed to load hosted files.', 'error');
+        }
+    }
+    
+    /**
+     * Loads a specific VCF file from Firestore.
+     * @param {string} fileId The ID of the document to load.
+     */
+    async function loadVcfFile(fileId) {
+        try {
+            displayMessage(`Loading file "${fileId}"...`, 'info');
+            const docRef = doc(db, `artifacts/${appId}/public/data/vcf_files`, fileId);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                let vcards = [];
+                // Check if the content is a string (old format) or an array (new format)
+                if (typeof data.content === 'string') {
+                    vcards = parseVCF(data.content);
+                } else if (Array.isArray(data.content)) {
+                    vcards = data.content;
+                } else {
+                    displayMessage('Hosted file is empty or corrupted.', 'error');
+                    return;
+                }
+                
+                renderTable(vcards);
+                currentVcfName = fileId;
+                shareLinkContainer.classList.remove('hidden');
+                shareLinkInput.value = `${window.location.origin}${window.location.pathname}?fileId=${currentVcfName}`;
+                fileNameInput.value = currentVcfName;
+                displayMessage(`File "${fileId}" loaded successfully!`, 'success');
+            } else {
+                displayMessage(`File "${fileId}" not found.`, 'error');
+            }
+        } catch (error) {
+            console.error('Error loading VCF file from Firestore:', error);
+            displayMessage('Failed to load the file.', 'error');
+        }
+    }
+    
+    // --- Event Listeners ---
+    
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const vcfContent = e.target.result;
+                    const parsedData = parseVCF(vcfContent);
+                    renderTable(parsedData);
+                    currentVcfName = null; // Clear current hosted name
+                    fileNameInput.value = '';
+                    shareLinkContainer.classList.add('hidden');
+                    displayMessage('File uploaded and ready for editing!', 'success');
+                } catch (error) {
+                    console.error('Error processing VCF file:', error);
+                    displayMessage('Failed to parse the VCF file. Please ensure it is a valid format.', 'error');
+                }
+            };
+            reader.onerror = () => {
+                displayMessage('Error reading file.', 'error');
+            };
+            reader.readAsText(file);
+        }
+    });
+
+    vcfTable.addEventListener('input', (event) => {
+        const cell = event.target;
+        const rowIndex = parseInt(cell.dataset.row, 10);
+        const colName = cell.dataset.col;
+        const newValue = cell.textContent;
+
+        if (vcfData[rowIndex]) {
+            vcfData[rowIndex][colName] = newValue;
+        }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+        const vcfContent = reconstructVCF();
+        if (vcfContent.trim() === '') {
+            displayMessage('There is no data to download.', 'error');
+            return;
+        }
+        const blob = new Blob([vcfContent], { type: 'text/vcf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentVcfName ? `${currentVcfName}.vcf` : 'edited.vcf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        displayMessage('File download started!', 'success');
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        if (!currentUserId) {
+            displayMessage('Authenticating... Please wait.', 'info');
+            return;
+        }
+        
+        const fileName = fileNameInput.value.trim();
+        if (!fileName) {
+            displayMessage('Please enter a unique name for your file.', 'error');
+            return;
+        }
+        
+        if (vcfData.length === 0) {
+            displayMessage('No VCF data to save.', 'error');
+            return;
+        }
+
+        try {
+            const docRef = doc(db, `artifacts/${appId}/public/data/vcf_files`, fileName);
+            await setDoc(docRef, {
+                content: vcfData, // Store the vcard array as JSON
+                createdAt: new Date().toISOString(),
+                ownerId: currentUserId
+            });
+            currentVcfName = fileName;
+            shareLinkContainer.classList.remove('hidden');
+            shareLinkInput.value = `${window.location.origin}${window.location.pathname}?fileId=${currentVcfName}`;
+            displayMessage(`File "${fileName}" saved successfully!`, 'success');
+        } catch (error) {
+            console.error('Error saving file to Firestore:', error);
+            displayMessage('Failed to save the file. Please try again.', 'error');
+        }
+    });
+    
+    copyBtn.addEventListener('click', () => {
+        const shareLink = shareLinkInput.value;
+        if (shareLink) {
+            const tempInput = document.createElement('input');
+            tempInput.value = shareLink;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            displayMessage('Shareable link copied to clipboard!', 'success');
+        }
+    });
+
+    addContactBtn.addEventListener('click', () => {
+        const newContact = {};
+        vcardProperties.forEach(prop => newContact[prop] = '');
+        vcfData.push(newContact);
+        renderTable(vcfData);
+        displayMessage('New contact row added!', 'success');
+    });
+
+    deleteSelectedBtn.addEventListener('click', () => {
+        const selectedRows = Array.from(document.querySelectorAll('.select-row-checkbox:checked'))
+            .map(checkbox => parseInt(checkbox.dataset.rowIndex, 10))
+            .sort((a, b) => b - a); // Sort in descending order to avoid index issues
+        
+        if (selectedRows.length === 0) {
+            displayMessage('Please select one or more rows to delete.', 'info');
+            return;
+        }
+
+        selectedRows.forEach(index => {
+            vcfData.splice(index, 1);
+        });
+        
+        renderTable(vcfData);
+        displayMessage(`${selectedRows.length} contact(s) deleted.`, 'success');
+    });
+
+    vcfTable.addEventListener('change', (event) => {
+        if (event.target.id === 'select-all-checkbox') {
+            const isChecked = event.target.checked;
+            document.querySelectorAll('.select-row-checkbox').forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+        }
+    });
+
+    // Initial setup
+    window.onload = initializeFirebase;
+</script>
+
+</body>
+</html>
